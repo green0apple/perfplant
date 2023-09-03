@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
+	"perfplant/event"
 	"perfplant/event/module/epoll"
 	"syscall"
 	"unsafe"
@@ -20,20 +21,9 @@ type Connection struct {
 }
 
 func main() {
-	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM, syscall.IPPROTO_IP)
+	listener := event.NewListener()
+	err := listener.ListenUDP(syscall.SockaddrInet4{Port: 80}, 1024, event.LISTEN_OPT_NONBLOCK)
 	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("listen fd=%d\n", fd)
-	if err = syscall.SetNonblock(fd, true); err != nil {
-		panic(err)
-	}
-
-	if err = syscall.Bind(fd, &syscall.SockaddrInet4{Port: 80}); err != nil {
-		panic(err)
-	}
-
-	if err = syscall.Listen(fd, 1024); err != nil {
 		panic(err)
 	}
 
@@ -42,9 +32,7 @@ func main() {
 		panic(err)
 	}
 
-	conn := Connection{Fd: fd, Typ: CONN_TYPE_LISTENER}
-
-	if err = e.Add(fd, epoll.EPOLLIN, conn); err != nil {
+	if err = e.Add(listener.GetFd(), epoll.EPOLLIN, &listener); err != nil {
 		panic(err)
 	}
 
@@ -53,6 +41,9 @@ func main() {
 		count, i int
 		ptr      uintptr
 		events   []epoll.EpollEvent = make([]epoll.EpollEvent, 10)
+
+		n    int
+		from syscall.SockaddrInet4
 	)
 
 	for {
@@ -65,19 +56,10 @@ func main() {
 			ptr = uintptr(binary.BigEndian.Uint64(events[i].Ptr[:]))
 			data = *(*epoll.EpollData)(unsafe.Pointer(ptr))
 
+			n, from, err = syscall.Recvfrom(int(data.Fd))
+
 			fmt.Printf("fd is : %d\n", data.Fd)
 			fmt.Printf("data is : %v\n", data.Data)
-
-			// fmt.Printf("sizeof=%d\n", unsafe.Sizeof(events[i].Ptr))
-			// fmt.Printf("after : %v\n", (*epoll.EpollData)(unsafe.Pointer(events[i].Ptr)))
-			// (*(*Event)(events[ev].Ptr)
-			// fmt.Printf("%v\n", (*(*epoll.EpollEvent)(events[i].Ptr)))
-
-			// conn := (**(**epoll.Data)(unsafe.	Pointer(&events[i].Fd))).(Connection)
-			// fmt.Printf("fd=%d, events=0x%x, conn.fd=%d, conn.typ=%d\n", events[i].Fd, events[i].Events, conn.Fd, conn.Typ)
-			// data := (*epoll.EpollData)(events[i].Ptr)
-			// // fmt.Printf("fd=%d, events=0x%x\n", data.Fd, data.Ptr)
-			// fmt.Printf("%v\n", data)
 		}
 	}
 }
