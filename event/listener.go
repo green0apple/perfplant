@@ -2,6 +2,8 @@ package event
 
 import (
 	"errors"
+	"perfplant/buffer/rbtree"
+	"sync"
 	"syscall"
 )
 
@@ -42,18 +44,37 @@ func setListenerOpt(fd int, options ...ListenOption) error {
 	return nil
 }
 
-type Listener Conn
-
-func NewListener() *Listener {
-	return (*Listener)(NewConn())
+type ListenerConnectionsTree struct {
+	sync.RWMutex
+	rbtree.Tree
 }
 
-func (l *Listener) ListenUDP(addr syscall.SockaddrInet4, backlog int, options ...ListenOption) error {
-	return l.listen(addr, backlog, syscall.SOCK_DGRAM, options...)
+func (this *ListenerConnectionsTree) InsertConn(conn *UDPConn) {
+	this.Lock()
+	defer this.Unlock()
+
 }
 
-func (l *Listener) listen(addr syscall.SockaddrInet4, backlog int, sockType int, options ...ListenOption) error {
-	fd, err := syscall.Socket(syscall.AF_INET, sockType, syscall.IPPROTO_IP)
+func (this *ListenerConnectionsTree) lookupConn(raddr *syscall.SockaddrInet4) *UDPConn {
+
+}
+
+type Listener interface {
+	Listen(addr syscall.Sockaddr, options ...ListenOption) error
+	Fd() int
+	Close() error
+}
+
+type UDPListener struct {
+	conn        *UDPConn
+	connections *ListenerConnectionsTree
+}
+
+func (this *UDPListener) Fd() int { return this.conn.fd }
+func (this *UDPListener) Close()  { this.conn.Close() }
+
+func (this *UDPListener) Listen(addr syscall.SockaddrInet4, backlog int, options ...ListenOption) error {
+	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_DGRAM, syscall.IPPROTO_IP)
 	if err != nil {
 		return err
 	}
@@ -73,10 +94,43 @@ func (l *Listener) listen(addr syscall.SockaddrInet4, backlog int, sockType int,
 		return err
 	}
 
-	(*l).SetFd(fd)
-	l.SetType(CONN_TYPE_LISTENER)
+	if this.conn == nil {
+		this.conn = NewUDPConn()
+	}
 
-	// TODO :: SetAddr
-	l.conn.saddr = &addr
+	this.conn.SetFd(fd)
+	this.conn.SetSAddr(&addr)
 	return nil
+}
+
+func (this *UDPListener) Recvmsg() (*UDPConn, []byte, error) {
+	if this.conn.IsValid() {
+		return nil, nil, ErrInvalidConnFd
+	}
+
+	from, b, err := this.conn.Recvmsg()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	conn, err := this.connections.Search(this.conn.saddr, from)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if conn == nil {
+		conn = NewUDPConn()
+	}
+
+	return conn, b, nil
+}
+
+func ListenUDP(addr syscall.SockaddrInet4, backlog int, options ...ListenOption) (*UDPListener, error) {
+	u := UDPListener{}
+
+	if err := u.Listen(addr, backlog, options...); err != nil {
+		return nil, err
+	}
+
+	return &u, nil
 }

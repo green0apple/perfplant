@@ -21,8 +21,7 @@ type Connection struct {
 }
 
 func main() {
-	listener := event.NewListener()
-	err := listener.ListenUDP(syscall.SockaddrInet4{Port: 80}, 1024, event.LISTEN_OPT_NONBLOCK)
+	listener, err := event.ListenUDP(syscall.SockaddrInet4{Port: 80}, 1024, event.LISTEN_OPT_NONBLOCK)
 	if err != nil {
 		panic(err)
 	}
@@ -32,7 +31,7 @@ func main() {
 		panic(err)
 	}
 
-	if err = e.Add(listener.GetFd(), epoll.EPOLLIN, &listener); err != nil {
+	if err = e.Add(listener.Fd(), epoll.EPOLLIN, &listener); err != nil {
 		panic(err)
 	}
 

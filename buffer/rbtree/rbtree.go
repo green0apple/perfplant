@@ -1,14 +1,15 @@
 package rbtree
 
+import "unsafe"
+
 const (
 	NODE_COLOR_BLACK = false
 	NODE_COLOR_RED   = true
 )
 
-type Key uintptr
-
 type Node struct {
-	key    Key
+	key    uint
+	val    unsafe.Pointer
 	left   *Node
 	right  *Node
 	parent *Node
