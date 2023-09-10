@@ -55,14 +55,11 @@ type ListenerConnectionsTree struct {
 func (this *ListenerConnectionsTree) InsertConn(conn *UDPConn) {
 	this.Lock()
 	defer this.Unlock()
-
-	node := rbtree.NewNode(conn.Hash(), unsafe.Pointer(conn))
-
-	this.tree.Insert(node)
+	this.tree.Insert(conn.Hash(), unsafe.Pointer(conn))
 }
 
-func (this *ListenerConnectionsTree) lookupConn(raddr *syscall.SockaddrInet4) *UDPConn {
-
+func (this *ListenerConnectionsTree) lookupConn(server, client *syscall.SockaddrInet4) *UDPConn {
+	return nil
 }
 
 type Listener interface {
@@ -119,10 +116,7 @@ func (this *UDPListener) Recvmsg() (*UDPConn, []byte, error) {
 		return nil, nil, err
 	}
 
-	conn, err := this.connections.Search(this.conn.saddr, from)
-	if err != nil {
-		return nil, nil, err
-	}
+	conn := this.connections.lookupConn(this.conn.saddr, from)
 
 	if conn == nil {
 		conn = NewUDPConn()

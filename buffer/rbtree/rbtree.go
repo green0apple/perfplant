@@ -10,8 +10,6 @@ const (
 	NODE_COLOR_RED   = true
 )
 
-var nilNode = &Node{color: NODE_COLOR_BLACK}
-
 type Node struct {
 	key    uint32
 	val    unsafe.Pointer
@@ -27,11 +25,11 @@ func isNodeRed(node *Node) bool    { return node.color == NODE_COLOR_RED }
 func isNodeBlack(node *Node) bool  { return node.color == NODE_COLOR_BLACK }
 
 func min(node *Node) *Node {
-	if node == nilNode {
-		return nilNode
+	if node == nil {
+		return nil
 	}
 
-	for node.left != nilNode {
+	for node.left != nil {
 		node = node.left
 	}
 
@@ -39,11 +37,11 @@ func min(node *Node) *Node {
 }
 
 func max(node *Node) *Node {
-	if node == nilNode {
-		return nilNode
+	if node == nil {
+		return nil
 	}
 
-	for node.right != nilNode {
+	for node.right != nil {
 		node = node.right
 	}
 
@@ -58,32 +56,35 @@ func NewNode(key uint32, val unsafe.Pointer) *Node {
 }
 
 type Tree struct {
-	root     *Node
-	sentinel *Node
+	root *Node
 }
 
-func (this *Tree) Insert(node *Node) {
-	if node == nil {
-		return
+func NewTree() *Tree {
+	return &Tree{
+		root: &Node{color: NODE_COLOR_BLACK},
 	}
+}
+
+func (this *Tree) Insert(key uint32, val unsafe.Pointer) {
+	node := NewNode(key, val)
 
 	setNodeColorRed(node)
 	this.insert(node)
 }
 
 func (this *Tree) rotateLeft(node *Node) {
-	if node.right == nilNode {
+	if node.right == nil {
 		return
 	}
 
 	temp := node.right
 	node.right = temp.left
-	if temp.left != nilNode {
+	if temp.left != nil {
 		temp.left.parent = node
 	}
 	temp.parent = node.parent
 
-	if node.parent == nilNode {
+	if node.parent == nil {
 		this.root = temp
 	} else if node == node.parent.left {
 		node.parent.left = temp
@@ -96,18 +97,18 @@ func (this *Tree) rotateLeft(node *Node) {
 }
 
 func (this *Tree) rotateRight(node *Node) {
-	if node.left == nilNode {
+	if node.left == nil {
 		return
 	}
 
 	temp := node.left
 	node.left = temp.right
-	if temp.right != nilNode {
+	if temp.right != nil {
 		temp.right.parent = node
 	}
 	temp.parent = node.parent
 
-	if node.parent == nilNode {
+	if node.parent == nil {
 		this.root = temp
 	} else if node == node.parent.left {
 		node.parent.left = temp
@@ -120,22 +121,24 @@ func (this *Tree) rotateRight(node *Node) {
 }
 
 func (this *Tree) insert(node *Node) {
-	root := this.root
-	temp := nilNode
+	var (
+		root *Node = this.root
+		temp *Node
+	)
 
-	for root != nilNode {
+	for root != nil {
 		temp = root
 		if node.key < root.key {
 			root = root.left
 		} else if root.key < node.key {
 			root = root.right
 		} else {
-			break // return root?
+			return // return root?
 		}
 	}
 
 	node.parent = temp
-	if temp == nilNode {
+	if temp == nil {
 		this.root = node
 	} else if node.key < temp.key {
 		temp.left = node
@@ -192,7 +195,7 @@ func (this *Tree) insertFixup(node *Node) {
 func (this *Tree) lookup(key uint32) *Node {
 	current := this.root
 
-	for current != nilNode {
+	for current != nil {
 		if current.key < key {
 			current = current.right
 		} else if current.key > key {
@@ -206,16 +209,16 @@ func (this *Tree) lookup(key uint32) *Node {
 }
 
 func (this *Tree) successor(node *Node) *Node {
-	if node == nilNode {
-		return nilNode
+	if node == nil {
+		return nil
 	}
 
-	if node.right != nilNode {
+	if node.right != nil {
 		return min(node.right)
 	}
 
 	temp := node.parent
-	if temp != nilNode && node == temp.right {
+	if temp != nil && node == temp.right {
 		node = temp
 		temp = temp.parent
 	}
@@ -225,18 +228,18 @@ func (this *Tree) successor(node *Node) *Node {
 
 func (this *Tree) delete(key uint32) {
 	node := this.lookup(key)
-	if node == nilNode {
+	if node == nil {
 		return
 	}
 
 	var temp1, temp2 *Node
-	if node.left == nilNode || node.right == nilNode {
+	if node.left == nil || node.right == nil {
 		temp1 = node
 	} else {
 		temp1 = this.successor(node)
 	}
 
-	if temp1.left == nilNode {
+	if temp1.left == nil {
 		temp2 = temp1.right
 	} else {
 		temp2 = temp1.left
@@ -244,7 +247,7 @@ func (this *Tree) delete(key uint32) {
 
 	temp2.parent = temp1.parent
 
-	if temp1.parent == nilNode {
+	if temp1.parent == nil {
 		this.root = temp2
 	} else if temp1 == temp1.parent.left {
 		temp1.parent.left = temp2
