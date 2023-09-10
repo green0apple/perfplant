@@ -5,7 +5,6 @@ import (
 	"perfplant/buffer/rbtree"
 	"sync"
 	"syscall"
-	"unsafe"
 )
 
 type ListenOption int
@@ -48,14 +47,14 @@ func setListenerOpt(fd int, options ...ListenOption) error {
 type ListenerConnectionsTree struct {
 	sync.RWMutex
 
-	tree     rbtree.Tree
+	tree     rbtree.Rbtree
 	sentinel *rbtree.Node
 }
 
 func (this *ListenerConnectionsTree) InsertConn(conn *UDPConn) {
 	this.Lock()
 	defer this.Unlock()
-	this.tree.Insert(conn.Hash(), unsafe.Pointer(conn))
+	// this.tree.Insert(conn.Hash(), unsafe.Pointer(conn))
 }
 
 func (this *ListenerConnectionsTree) lookupConn(server, client *syscall.SockaddrInet4) *UDPConn {

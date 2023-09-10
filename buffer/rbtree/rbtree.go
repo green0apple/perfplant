@@ -2,327 +2,307 @@ package rbtree
 
 import "unsafe"
 
-// TODO :: Inline?
-// refer : https://github.com/HuKeping/rbtree/blob/master/rbtree.go#L39
-
-const (
-	NODE_COLOR_BLACK = false
-	NODE_COLOR_RED   = true
-)
-
 type Node struct {
-	key    uint32
-	val    unsafe.Pointer
 	left   *Node
 	right  *Node
 	parent *Node
-	color  bool
+
+	color bool
+
+	key uint32
+	val unsafe.Pointer
 }
 
-func setNodeColorRed(node *Node)   { node.color = NODE_COLOR_RED }
-func setNodeColorBlack(node *Node) { node.color = NODE_COLOR_BLACK }
-func isNodeRed(node *Node) bool    { return node.color == NODE_COLOR_RED }
-func isNodeBlack(node *Node) bool  { return node.color == NODE_COLOR_BLACK }
+const (
+	RED   = false
+	BLACK = true
+)
 
-func min(node *Node) *Node {
-	if node == nil {
-		return nil
-	}
-
-	for node.left != nil {
-		node = node.left
-	}
-
-	return node
-}
-
-func max(node *Node) *Node {
-	if node == nil {
-		return nil
-	}
-
-	for node.right != nil {
-		node = node.right
-	}
-
-	return node
-}
-
-func NewNode(key uint32, val unsafe.Pointer) *Node {
-	return &Node{
-		key: key,
-		val: val,
-	}
-}
-
-type Tree struct {
+type Rbtree struct {
+	NIL  *Node
 	root *Node
 }
 
-func NewTree() *Tree {
-	return &Tree{
-		root: &Node{color: NODE_COLOR_BLACK},
+func NewRbtree() *Rbtree { return new(Rbtree).Init() }
+
+func (t *Rbtree) Init() *Rbtree {
+	node := &Node{color: BLACK}
+	return &Rbtree{
+		NIL:  node,
+		root: node,
 	}
 }
 
-func (this *Tree) Insert(key uint32, val unsafe.Pointer) {
-	node := NewNode(key, val)
-
-	setNodeColorRed(node)
-	this.insert(node)
-}
-
-func (this *Tree) rotateLeft(node *Node) {
-	if node.right == nil {
+func (t *Rbtree) leftRotate(x *Node) {
+	if x.right == t.NIL {
 		return
 	}
 
-	temp := node.right
-	node.right = temp.left
-	if temp.left != nil {
-		temp.left.parent = node
+	y := x.right
+	x.right = y.left
+	if y.left != t.NIL {
+		y.left.parent = x
 	}
-	temp.parent = node.parent
+	y.parent = x.parent
 
-	if node.parent == nil {
-		this.root = temp
-	} else if node == node.parent.left {
-		node.parent.left = temp
+	if x.parent == t.NIL {
+		t.root = y
+	} else if x == x.parent.left {
+		x.parent.left = y
 	} else {
-		node.parent.right = temp
+		x.parent.right = y
 	}
 
-	temp.left = node
-	node.parent = temp
+	y.left = x
+	x.parent = y
 }
 
-func (this *Tree) rotateRight(node *Node) {
-	if node.left == nil {
+func (t *Rbtree) rightRotate(x *Node) {
+	if x.left == t.NIL {
 		return
 	}
 
-	temp := node.left
-	node.left = temp.right
-	if temp.right != nil {
-		temp.right.parent = node
+	y := x.left
+	x.left = y.right
+	if y.right != t.NIL {
+		y.right.parent = x
 	}
-	temp.parent = node.parent
+	y.parent = x.parent
 
-	if node.parent == nil {
-		this.root = temp
-	} else if node == node.parent.left {
-		node.parent.left = temp
+	if x.parent == t.NIL {
+		t.root = y
+	} else if x == x.parent.left {
+		x.parent.left = y
 	} else {
-		node.parent.right = temp
+		x.parent.right = y
 	}
 
-	temp.right = node
-	node.parent = temp
+	y.right = x
+	x.parent = y
 }
 
-func (this *Tree) insert(node *Node) {
-	var (
-		root *Node = this.root
-		temp *Node
-	)
+func (t *Rbtree) insert(z *Node) *Node {
+	x := t.root
+	y := t.NIL
 
-	for root != nil {
-		temp = root
-		if node.key < root.key {
-			root = root.left
-		} else if root.key < node.key {
-			root = root.right
+	for x != t.NIL {
+		y = x
+		if z.key < x.key {
+			x = x.left
+		} else if x.key < z.key {
+			x = x.right
 		} else {
-			return // return root?
+			return x
 		}
 	}
 
-	node.parent = temp
-	if temp == nil {
-		this.root = node
-	} else if node.key < temp.key {
-		temp.left = node
+	z.parent = y
+	if y == t.NIL {
+		t.root = z
+	} else if z.key < y.key {
+		y.left = z
 	} else {
-		temp.right = node
+		y.right = z
 	}
 
-	this.insertFixup(node)
-	// return node?
+	t.insertFixup(z)
+	return z
 }
 
-func (this *Tree) insertFixup(node *Node) {
-	if isNodeRed(node.parent) {
-		if node.parent == node.parent.parent.left {
-			temp := node.parent.parent.right
-			if isNodeRed(temp) {
-				setNodeColorBlack(node.parent)
-				setNodeColorBlack(temp)
-				setNodeColorRed(node.parent.parent)
-				node = node.parent.parent
+func (t *Rbtree) insertFixup(z *Node) {
+	for z.parent.color == RED {
+		if z.parent == z.parent.parent.left {
+			y := z.parent.parent.right
+			if y.color == RED {
+				z.parent.color = BLACK
+				y.color = BLACK
+				z.parent.parent.color = RED
+				z = z.parent.parent
 			} else {
-				if node == node.parent.right {
-					node = node.parent
-					this.rotateLeft(node)
+				if z == z.parent.right {
+					z = z.parent
+					t.leftRotate(z)
 				}
-			}
 
-			setNodeColorBlack(node.parent)
-			setNodeColorRed(node.parent.parent)
-			this.rotateRight(node.parent.parent)
-		}
-	} else {
-		temp := node.parent.parent.left
-		if isNodeRed(temp) {
-			setNodeColorBlack(node.parent)
-			setNodeColorBlack(temp)
-			setNodeColorRed(node.parent.parent)
-			node = node.parent.parent
+				z.parent.color = BLACK
+				z.parent.parent.color = RED
+				t.rightRotate(z.parent.parent)
+			}
 		} else {
-			if node == node.parent.left {
-				node = node.parent
-				this.rotateRight(node)
+			y := z.parent.parent.left
+			if y.color == RED {
+				z.parent.color = BLACK
+				y.color = BLACK
+				z.parent.parent.color = RED
+				z = z.parent.parent
+			} else {
+				if z == z.parent.left {
+					z = z.parent
+					t.rightRotate(z)
+				}
+				z.parent.color = BLACK
+				z.parent.parent.color = RED
+				t.leftRotate(z.parent.parent)
 			}
-
-			setNodeColorBlack(node.parent)
-			setNodeColorRed(node.parent.parent)
-			this.rotateLeft(node.parent.parent)
 		}
 	}
-
-	setNodeColorBlack(this.root)
+	t.root.color = BLACK
 }
 
-func (this *Tree) lookup(key uint32) *Node {
-	current := this.root
+func (t *Rbtree) min(x *Node) *Node {
+	if x == t.NIL {
+		return t.NIL
+	}
 
-	for current != nil {
-		if current.key < key {
-			current = current.right
-		} else if current.key > key {
-			current = current.left
+	for x.left != t.NIL {
+		x = x.left
+	}
+
+	return x
+}
+
+func (t *Rbtree) max(x *Node) *Node {
+	if x == t.NIL {
+		return t.NIL
+	}
+
+	for x.right != t.NIL {
+		x = x.right
+	}
+
+	return x
+}
+
+func (t *Rbtree) search(x *Node) *Node {
+	p := t.root
+
+	for p != t.NIL {
+		if p.key < x.key {
+			p = p.right
+		} else if x.key < p.key {
+			p = p.left
 		} else {
 			break
 		}
 	}
 
-	return current
+	return p
 }
 
-func (this *Tree) successor(node *Node) *Node {
-	if node == nil {
-		return nil
+func (t *Rbtree) successor(x *Node) *Node {
+	if x == t.NIL {
+		return t.NIL
 	}
 
-	if node.right != nil {
-		return min(node.right)
+	if x.right != t.NIL {
+		return t.min(x.right)
 	}
 
-	temp := node.parent
-	if temp != nil && node == temp.right {
-		node = temp
-		temp = temp.parent
+	y := x.parent
+	for y != t.NIL && x == y.right {
+		x = y
+		y = y.parent
 	}
-
-	return temp
+	return y
 }
 
-func (this *Tree) delete(key uint32) {
-	node := this.lookup(key)
-	if node == nil {
-		return
-	}
+func (t *Rbtree) delete(key *Node) *Node {
+	z := t.search(key)
 
-	var temp1, temp2 *Node
-	if node.left == nil || node.right == nil {
-		temp1 = node
+	if z == t.NIL {
+		return t.NIL
+	}
+	ret := &Node{color: z.color}
+
+	var y *Node
+	var x *Node
+
+	if z.left == t.NIL || z.right == t.NIL {
+		y = z
 	} else {
-		temp1 = this.successor(node)
+		y = t.successor(z)
 	}
 
-	if temp1.left == nil {
-		temp2 = temp1.right
+	if y.left != t.NIL {
+		x = y.left
 	} else {
-		temp2 = temp1.left
+		x = y.right
 	}
 
-	temp2.parent = temp1.parent
+	x.parent = y.parent
 
-	if temp1.parent == nil {
-		this.root = temp2
-	} else if temp1 == temp1.parent.left {
-		temp1.parent.left = temp2
+	if y.parent == t.NIL {
+		t.root = x
+	} else if y == y.parent.left {
+		y.parent.left = x
 	} else {
-		temp1.parent.right = temp2
+		y.parent.right = x
 	}
 
-	if temp1 != node {
-		node.key = temp1.key
+	if y != z {
+		z.key = y.key
 	}
 
-	if isNodeBlack(temp1) {
-		this.deleteFixup(temp2)
+	if y.color == BLACK {
+		t.deleteFixup(x)
 	}
+
+	return ret
 }
 
-func (this *Tree) deleteFixup(node *Node) {
-	if node != this.root && isNodeBlack(node) {
-		if node == node.parent.left {
-			temp := node.parent.right
-			if isNodeRed(temp) {
-				setNodeColorRed(temp)
-				setNodeColorRed(node.parent)
-				this.rotateLeft(node.parent)
-				temp = node.parent.right
+func (t *Rbtree) deleteFixup(x *Node) {
+	for x != t.root && x.color == BLACK {
+		if x == x.parent.left {
+			w := x.parent.right
+			if w.color == RED {
+				w.color = BLACK
+				x.parent.color = RED
+				t.leftRotate(x.parent)
+				w = x.parent.right
 			}
-
-			if isNodeBlack(temp.left) && isNodeRed(temp.right) {
-				setNodeColorRed(temp)
-				node = node.parent
+			if w.left.color == BLACK && w.right.color == BLACK {
+				w.color = RED
+				x = x.parent
 			} else {
-				if isNodeBlack(temp.right) {
-					setNodeColorBlack(node.left)
-					setNodeColorRed(temp)
-					this.rotateRight(temp)
-					temp = node.parent.right
+				if w.right.color == BLACK {
+					w.left.color = BLACK
+					w.color = RED
+					t.rightRotate(w)
+					w = x.parent.right
 				}
+				w.color = x.parent.color
+				x.parent.color = BLACK
+				w.right.color = BLACK
+				t.leftRotate(x.parent)
 
-				temp.color = node.parent.color
-				setNodeColorBlack(node.parent)
-				setNodeColorBlack(temp.right)
-				this.rotateLeft(node.parent)
-
-				// exit loop
-				node = this.root
+				// this is to exit while loop
+				x = t.root
 			}
 		} else {
-			temp := node.parent.left
-			if isNodeRed(temp) {
-				setNodeColorBlack(temp)
-				setNodeColorRed(node)
-				this.rotateRight(node.parent)
-				temp = node.parent.left
+			w := x.parent.left
+			if w.color == RED {
+				w.color = BLACK
+				x.parent.color = RED
+				t.rightRotate(x.parent)
+				w = x.parent.left
 			}
-
-			if isNodeBlack(temp.left) && isNodeBlack(temp.right) {
-				setNodeColorRed(temp)
-				node = node.parent
+			if w.left.color == BLACK && w.right.color == BLACK {
+				w.color = RED
+				x = x.parent
 			} else {
-				if isNodeBlack(temp.left) {
-					setNodeColorBlack(temp.right)
-					setNodeColorRed(temp)
-					this.rotateLeft(temp)
-					temp = node.parent.left
+				if w.left.color == BLACK {
+					w.right.color = BLACK
+					w.color = RED
+					t.leftRotate(w)
+					w = x.parent.left
 				}
-
-				temp.color = node.parent.color
-				setNodeColorBlack(node.parent)
-				setNodeColorBlack(temp.left)
-				this.rotateRight(node.parent)
-
-				node = this.root
+				w.color = x.parent.color
+				x.parent.color = BLACK
+				w.left.color = BLACK
+				t.rightRotate(x.parent)
+				x = t.root
 			}
 		}
 	}
-
-	setNodeColorBlack(node)
+	x.color = BLACK
 }
