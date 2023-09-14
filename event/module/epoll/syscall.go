@@ -49,8 +49,8 @@ func errnoErr(e syscall.Errno) error {
 */
 
 type EpollData struct {
-	Data any
-	Fd   int32
+	Ptr uintptr
+	Fd  int32
 }
 
 type EpollEvent struct {

@@ -3,6 +3,7 @@ package epoll
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"perfplant/event/module"
 	"syscall"
 	"unsafe"
@@ -44,7 +45,7 @@ func (e *EPoll) Close() {
 	}
 }
 
-func (e *EPoll) Add(fd int, events uint32, data any) error {
+func (e *EPoll) Add(fd int, events uint32, data uintptr) error {
 	var (
 		ev  EpollEvent
 		ed  EpollData
@@ -52,7 +53,7 @@ func (e *EPoll) Add(fd int, events uint32, data any) error {
 	)
 
 	ed.Fd = int32(fd)
-	ed.Data = data
+	ed.Ptr = data
 
 	ptr = uintptr(unsafe.Pointer(&ed))
 	binary.BigEndian.PutUint64(ev.Ptr[:], uint64(ptr))
@@ -70,62 +71,62 @@ func (e *EPoll) WaitEvent(events []EpollEvent) (int, error) {
 }
 
 func (e *EPoll) WaitProcessLoop() error {
-	return nil
-	// if e.fd <= 0 {
-	// 	return ErrEPollNotInitialized
-	// }
+	if e.fd <= 0 {
+		return ErrEPollNotInitialized
+	}
 
-	// if !e.Callback.IsAllReady() {
-	// 	return module.ErrMissingCallback
-	// }
+	if !e.Callback.IsAllReady() {
+		return module.ErrMissingCallback
+	}
 
-	// var (
-	// 	events       []EpollEvent = make([]EpollEvent, 64)
-	// 	data         *EpollData
-	// 	isNewConn    bool
-	// 	i, count, fd int
-	// 	err          error
-	// )
-	// for {
-	// 	count, err = e.WaitEvent(events)
-	// 	if err != nil {
-	// 		fmt.Printf("err : %s", err)
-	// 		return err
-	// 	}
+	var (
+		events       []EpollEvent = make([]EpollEvent, 64)
+		data         *EpollData
+		isNewConn    bool
+		i, count, fd int
+		err          error
+	)
+	for {
+		count, err = e.WaitEvent(events)
+		if err != nil {
+			fmt.Printf("err : %s", err)
+			return err
+		}
 
-	// 	for i = 0; i < count; i++ {
-	// 		data = (*EpollData)(events[i].Ptr)
-	// 		fd = int(data.Fd)
-	// 		if data.Ptr == 0 {
-	// 			isNewConn = true
-	// 		} else {
-	// 			isNewConn = false
-	// 		}
+		for i = 0; i < count; i++ {
+			ptr := unsafe.Pointer(uintptr(binary.BigEndian.Uint64(events[i].Ptr[:])))
+			data = (*EpollData)(ptr)
+			fd = int(data.Fd)
+			if data.Ptr == 0 {
+				isNewConn = true
+			} else {
+				isNewConn = false
+			}
 
-	// 		if isNewConn {
-	// 			fmt.Printf("new connection!!\n")
-	// 		}
+			if isNewConn {
+				fmt.Printf("new connection!!\n")
+			}
 
-	// 		if events[i].Events&syscall.EPOLLERR == 1 {
-	// 			e.Callback.DoProcessErr(fd, data.Ptr)
-	// 			continue // no need to process error connection
-	// 		}
+			if events[i].Events&syscall.EPOLLERR == 1 {
+				e.Callback.DoProcessErr(fd, data.Ptr)
+				continue // no need to process error connection
+			}
 
-	// 		if events[i].Events&syscall.EPOLLIN == 1 {
-	// 			if isNewConn {
-	// 				e.Callback.DoAccept(fd, data.Ptr)
-	// 			} else {
-	// 				e.Callback.DoRead(fd, data.Ptr)
-	// 			}
-	// 		}
+			if events[i].Events&syscall.EPOLLIN == 1 {
+				if isNewConn {
+					e.Callback.DoAccept(fd, data.Ptr)
+				} else {
+					e.Callback.DoRead(fd, data.Ptr)
+				}
+			}
 
-	// 		if events[i].Events&syscall.EPOLLOUT == 1 {
-	// 			e.Callback.DoWrite(fd, data.Ptr)
-	// 		}
+			if events[i].Events&syscall.EPOLLOUT == 1 {
+				e.Callback.DoWrite(fd, data.Ptr)
+			}
 
-	// 		if events[i].Events&(syscall.EPOLLHUP|syscall.EPOLLRDHUP) == 1 {
-	// 			e.Callback.DoClose(fd, data.Ptr)
-	// 		}
-	// 	}
-	// }
+			if events[i].Events&(syscall.EPOLLHUP|syscall.EPOLLRDHUP) == 1 {
+				e.Callback.DoClose(fd, data.Ptr)
+			}
+		}
+	}
 }

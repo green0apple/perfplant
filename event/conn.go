@@ -5,12 +5,72 @@ import (
 	"hash/crc32"
 	"perfplant/buffer/rbtree"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 var (
 	ErrInvalidConnFd    = errors.New("invalid fd")
 	ErrOnlySupportInet4 = errors.New("only supports ipv4")
 )
+
+func sockaddr4(sa syscall.Sockaddr) (*syscall.SockaddrInet4, error) {
+	switch saddr := sa.(type) {
+	case *syscall.SockaddrInet4:
+		return saddr, nil
+	default:
+		return nil, ErrOnlySupportInet4
+	}
+}
+
+func resolveUDP() (int, error) {
+	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_DGRAM, syscall.IPPROTO_UDP)
+	if err != nil {
+		return -1, err
+	}
+
+	if err = syscall.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_REUSEADDR, 1); err != nil {
+		syscall.Close(fd)
+		return -1, err
+	}
+
+	if err = syscall.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_REUSEPORT, 1); err != nil {
+		syscall.Close(fd)
+		return -1, err
+	}
+
+	if err = syscall.SetsockoptInt(fd, syscall.SOL_IP, syscall.IP_RECVERR, 1); err != nil {
+		syscall.Close(fd)
+		return -1, err
+	}
+
+	if err = syscall.SetNonblock(fd, true); err != nil {
+		syscall.Close(fd)
+		return -1, err
+	}
+
+	if err = syscall.Bind(fd, &syscall.SockaddrInet4{}); err != nil {
+		syscall.Close(fd)
+		return -1, err
+	}
+
+	return fd, nil
+}
+
+func Hash(saddr, daddr *syscall.SockaddrInet4) uint32 {
+	var b []byte
+	if saddr != nil {
+		b = append(b, saddr.Addr[:]...)
+		b = append(b, rbtree.PortLittleEndian(saddr.Port)...)
+	}
+
+	if daddr != nil {
+		b = append(b, daddr.Addr[:]...)
+		b = append(b, rbtree.PortLittleEndian(daddr.Port)...)
+	}
+
+	return crc32.ChecksumIEEE(b)
+}
 
 type conn struct {
 	fd int
@@ -34,18 +94,7 @@ func (c *conn) SAddr() *syscall.SockaddrInet4         { return c.saddr }
 func (c *conn) DAddr() *syscall.SockaddrInet4         { return c.daddr }
 
 func (c *conn) Hash() uint32 {
-	var b []byte
-	if c.saddr != nil {
-		b = append(b, c.saddr.Addr[:]...)
-		b = append(b, rbtree.PortLittleEndian(c.saddr.Port)...)
-	}
-
-	if c.daddr != nil {
-		b = append(b, c.daddr.Addr[:]...)
-		b = append(b, rbtree.PortLittleEndian(c.daddr.Port)...)
-	}
-
-	return crc32.ChecksumIEEE(b)
+	return Hash(c.saddr, c.daddr)
 }
 
 func (c *conn) Close() {
@@ -62,6 +111,35 @@ func NewUDPConn() *UDPConn {
 	return &UDPConn{conn: newConn()}
 }
 
+func (uc *UDPConn) Dial(daddr *syscall.SockaddrInet4) error {
+	fd, err := resolveUDP()
+	if err != nil {
+		return err
+	}
+
+	if err = syscall.Connect(fd, daddr); err != nil {
+		syscall.Close(fd)
+		return err
+	}
+
+	sa, err := syscall.Getpeername(fd)
+	if err != nil {
+		syscall.Close(fd)
+		return err
+	}
+
+	saddr, err := sockaddr4(sa)
+	if err != nil {
+		return err
+	}
+
+	uc.conn.SetFd(fd)
+	uc.conn.SetSAddr(saddr)
+	uc.conn.SetDAddr(daddr)
+
+	return nil
+}
+
 func (uc *UDPConn) Recvmsg() (*syscall.SockaddrInet4, []byte, error) {
 	if !uc.IsValid() {
 		return nil, nil, ErrInvalidConnFd
@@ -74,13 +152,13 @@ func (uc *UDPConn) Recvmsg() (*syscall.SockaddrInet4, []byte, error) {
 		return nil, nil, err
 	}
 
-	switch saddr := from.(type) {
-	case *syscall.SockaddrInet4:
-		return saddr, b[:n], nil
-	default:
-		err = ErrOnlySupportInet4
+	saddr, err := sockaddr4(from)
+	if err != nil {
 		return nil, nil, err
 	}
+
+	return saddr, b[:n], nil
+
 }
 
 func (uc *UDPConn) Sendto(to *syscall.SockaddrInet4, b []byte) error {

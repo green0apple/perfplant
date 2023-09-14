@@ -1,6 +1,8 @@
 package module
 
-import "errors"
+import (
+	"errors"
+)
 
 var (
 	ErrMissingCallback = errors.New("missing callback function")
@@ -11,7 +13,7 @@ type Callback struct {
 	DoRead       func(fd int, ptr uintptr)
 	DoWrite      func(fd int, ptr uintptr)
 	DoClose      func(fd int, ptr uintptr)
-	DoProcessErr func(Fd int, ptr uintptr)
+	DoProcessErr func(fd int, ptr uintptr)
 }
 
 func (c *Callback) IsAllReady() bool {

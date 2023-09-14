@@ -5,6 +5,7 @@ import (
 	"perfplant/buffer/rbtree"
 	"sync"
 	"syscall"
+	"unsafe"
 )
 
 type ListenOption int
@@ -47,18 +48,24 @@ func setListenerOpt(fd int, options ...ListenOption) error {
 type ListenerConnectionsTree struct {
 	sync.RWMutex
 
-	tree     rbtree.Rbtree
-	sentinel *rbtree.Node
+	tree rbtree.Rbtree
 }
 
 func (this *ListenerConnectionsTree) InsertConn(conn *UDPConn) {
 	this.Lock()
 	defer this.Unlock()
-	// this.tree.Insert(conn.Hash(), unsafe.Pointer(conn))
+	this.tree.Insert(conn.Hash(), unsafe.Pointer(conn))
 }
 
 func (this *ListenerConnectionsTree) lookupConn(server, client *syscall.SockaddrInet4) *UDPConn {
-	return nil
+	this.Lock()
+	ptr := this.tree.Lookup(Hash(server, client))
+	this.Unlock()
+	if ptr == nil {
+		return nil
+	}
+
+	return (*UDPConn)(ptr)
 }
 
 type Listener interface {
@@ -119,9 +126,20 @@ func (this *UDPListener) Recvmsg() (*UDPConn, []byte, error) {
 
 	if conn == nil {
 		conn = NewUDPConn()
+		conn.SetSAddr(from)
+		conn.SetDAddr(this.conn.saddr)
+		this.connections.InsertConn(conn)
 	}
 
 	return conn, b, nil
+}
+
+func (this *UDPListener) Sendto(to *UDPConn, b []byte) error {
+	if this.conn.IsValid() {
+		return ErrInvalidConnFd
+	}
+
+	return this.conn.Sendto(to.saddr, b)
 }
 
 func ListenUDP(addr syscall.SockaddrInet4, backlog int, options ...ListenOption) (*UDPListener, error) {
