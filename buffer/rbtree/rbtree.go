@@ -33,6 +33,34 @@ func (t *Rbtree) Init() *Rbtree {
 	}
 }
 
+func (t *Rbtree) Insert(key uint32, val unsafe.Pointer) {
+	t.insert(t.newDefaultNode(key, val))
+}
+
+func (t *Rbtree) Lookup(key uint32) unsafe.Pointer {
+	n := t.search(t.newDefaultNode(key, nil))
+	if n == nil {
+		return nil
+	}
+
+	return n.val
+}
+
+func (t *Rbtree) Delete(key uint32) {
+	t.delete(t.newDefaultNode(key, nil))
+}
+
+func (t *Rbtree) newDefaultNode(key uint32, val unsafe.Pointer) *Node {
+	return &Node{
+		left:   t.NIL,
+		right:  t.NIL,
+		parent: t.NIL,
+		color:  RED,
+		key:    key,
+		val:    val,
+	}
+}
+
 func (t *Rbtree) leftRotate(x *Node) {
 	if x.right == t.NIL {
 		return
