@@ -59,7 +59,7 @@ func (this *ListenerConnectionsTree) InsertConn(conn *UDPConn) {
 
 func (this *ListenerConnectionsTree) lookupConn(server, client *syscall.SockaddrInet4) *UDPConn {
 	this.Lock()
-	ptr := this.tree.Lookup(Hash(server, client))
+	ptr := this.tree.Lookup(HashAddr(server, client))
 	this.Unlock()
 	if ptr == nil {
 		return nil
@@ -79,8 +79,8 @@ type UDPListener struct {
 	connections *ListenerConnectionsTree
 }
 
-func (this *UDPListener) Fd() int { return this.conn.fd }
-func (this *UDPListener) Close()  { this.conn.Close() }
+func (this *UDPListener) Fd() int32 { return this.conn.fd }
+func (this *UDPListener) Close()    { this.conn.Close() }
 
 func (this *UDPListener) Listen(addr syscall.SockaddrInet4, backlog int, options ...ListenOption) error {
 	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_DGRAM, syscall.IPPROTO_IP)
@@ -107,7 +107,7 @@ func (this *UDPListener) Listen(addr syscall.SockaddrInet4, backlog int, options
 		this.conn = NewUDPConn()
 	}
 
-	this.conn.SetFd(fd)
+	this.conn.SetFd(int32(fd))
 	this.conn.SetSAddr(&addr)
 	return nil
 }

@@ -2,8 +2,6 @@ package event
 
 import (
 	"errors"
-	"hash/crc32"
-	"perfplant/buffer/rbtree"
 	"syscall"
 
 	"golang.org/x/sys/unix"
@@ -57,44 +55,8 @@ func Sockaddr4(sa syscall.Sockaddr) (*syscall.SockaddrInet4, error) {
 	}
 }
 
-func Hash(saddr, daddr *syscall.SockaddrInet4) uint32 {
-	var (
-		b     []byte
-		addrs [2]*syscall.SockaddrInet4
-	)
-
-	if saddr != nil && daddr != nil {
-		if saddr.Port < daddr.Port {
-			addrs[0] = saddr
-			addrs[1] = daddr
-		} else {
-			addrs[0] = daddr
-			addrs[1] = saddr
-		}
-	} else {
-		if saddr != nil {
-			addrs[0] = saddr
-		}
-
-		if daddr != nil {
-			addrs[1] = daddr
-		}
-	}
-
-	for _, a := range addrs {
-		if a == nil {
-			continue
-		}
-
-		b = append(b, a.Addr[:]...)
-		b = append(b, rbtree.PortLittleEndian(a.Port)...)
-	}
-
-	return crc32.ChecksumIEEE(b)
-}
-
 type conn struct {
-	fd int
+	fd int32
 
 	typ int
 
@@ -106,21 +68,18 @@ func newConn() *conn {
 	return &conn{}
 }
 
-func (c *conn) SetFd(fd int)                          { c.fd = fd }
-func (c *conn) Fd() int                               { return c.fd }
+func (c *conn) SetFd(fd int32)                        { c.fd = fd }
+func (c *conn) Fd() int32                             { return c.fd }
 func (c *conn) IsValid() bool                         { return c.fd > 0 }
 func (c *conn) SetSAddr(saddr *syscall.SockaddrInet4) { c.saddr = saddr }
 func (c *conn) SetDAddr(daddr *syscall.SockaddrInet4) { c.daddr = daddr }
 func (c *conn) SAddr() *syscall.SockaddrInet4         { return c.saddr }
 func (c *conn) DAddr() *syscall.SockaddrInet4         { return c.daddr }
-
-func (c *conn) Hash() uint32 {
-	return Hash(c.saddr, c.daddr)
-}
+func (c *conn) Hash() uint32                          { return HashAddr(c.saddr, c.daddr) }
 
 func (c *conn) Close() {
 	if c.fd > 0 {
-		syscall.Close(c.fd)
+		syscall.Close(int(c.fd))
 	}
 }
 
@@ -154,7 +113,7 @@ func (uc *UDPConn) Dial(daddr *syscall.SockaddrInet4) error {
 		return err
 	}
 
-	uc.conn.SetFd(fd)
+	uc.conn.SetFd(int32(fd))
 	uc.conn.SetSAddr(saddr)
 	uc.conn.SetDAddr(daddr)
 
@@ -167,7 +126,7 @@ func (uc *UDPConn) Recvmsg() (*syscall.SockaddrInet4, []byte, error) {
 	}
 
 	var b []byte = make([]byte, 32767)
-	n, _, _, from, err := syscall.Recvmsg(uc.fd, b, nil, syscall.MSG_DONTWAIT)
+	n, _, _, from, err := syscall.Recvmsg(int(uc.fd), b, nil, syscall.MSG_DONTWAIT)
 
 	if err != nil {
 		return nil, nil, err
@@ -187,5 +146,5 @@ func (uc *UDPConn) Sendto(to *syscall.SockaddrInet4, b []byte) error {
 		return ErrInvalidConnFd
 	}
 
-	return syscall.Sendto(uc.fd, b, syscall.MSG_DONTWAIT, to)
+	return syscall.Sendto(int(uc.fd), b, syscall.MSG_DONTWAIT, to)
 }

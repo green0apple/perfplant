@@ -13,24 +13,28 @@ import (
 type clientConnectionsTree struct {
 	sync.RWMutex
 
-	tree *rbtree.Rbtree
+	connTree *rbtree.Rbtree
+	fdTree   *rbtree.Rbtree
 }
 
 func (t *clientConnectionsTree) InsertConn(conn *event.UDPConn) {
 	t.Lock()
 	defer t.Unlock()
-	t.tree.Insert(conn.Hash(), unsafe.Pointer(conn))
+	t.connTree.Insert(conn.Hash(), unsafe.Pointer(conn))
+
+	fd :=
+		t.fdTree.Insert(event.HashFd(conn.Fd()), unsafe.Pointer(&conn.Fd()))
 }
 
 func (t *clientConnectionsTree) DeleteConn(conn *event.UDPConn) {
 	t.Lock()
 	defer t.Unlock()
-	t.tree.Delete(conn.Hash())
+	t.connTree.Delete(conn.Hash())
 }
 
 func (t *clientConnectionsTree) LookupConn(saddr, daddr *syscall.SockaddrInet4) *event.UDPConn {
 	t.Lock()
-	ptr := t.tree.Lookup(event.Hash(saddr, daddr))
+	ptr := t.connTree.Lookup(event.Hash(saddr, daddr))
 	t.Unlock()
 	if ptr == nil {
 		return nil
@@ -46,7 +50,7 @@ type Client struct {
 
 func NewClient() *Client {
 	return &Client{
-		tree: clientConnectionsTree{tree: rbtree.NewRbtree()},
+		tree: clientConnectionsTree{connTree: rbtree.NewRbtree(), fdTree: rbtree.NewRbtree()},
 	}
 }
 
