@@ -58,11 +58,12 @@ func Sockaddr4(sa syscall.Sockaddr) (*syscall.SockaddrInet4, error) {
 }
 
 func Hash(saddr, daddr *syscall.SockaddrInet4) uint32 {
-	var b []byte
+	var (
+		b     []byte
+		addrs [2]*syscall.SockaddrInet4
+	)
 
 	if saddr != nil && daddr != nil {
-		var addrs [2]*syscall.SockaddrInet4
-
 		if saddr.Port < daddr.Port {
 			addrs[0] = saddr
 			addrs[1] = daddr
@@ -70,22 +71,23 @@ func Hash(saddr, daddr *syscall.SockaddrInet4) uint32 {
 			addrs[0] = daddr
 			addrs[1] = saddr
 		}
-
-		for _, a := range addrs {
-			b = append(b, a.Addr[:]...)
-			b = append(b, rbtree.PortLittleEndian(a.Port)...)
-		}
 	} else {
-
 		if saddr != nil {
-			b = append(b, saddr.Addr[:]...)
-			b = append(b, rbtree.PortLittleEndian(saddr.Port)...)
+			addrs[0] = saddr
 		}
 
 		if daddr != nil {
-			b = append(b, daddr.Addr[:]...)
-			b = append(b, rbtree.PortLittleEndian(daddr.Port)...)
+			addrs[1] = daddr
 		}
+	}
+
+	for _, a := range addrs {
+		if a == nil {
+			continue
+		}
+
+		b = append(b, a.Addr[:]...)
+		b = append(b, rbtree.PortLittleEndian(a.Port)...)
 	}
 
 	return crc32.ChecksumIEEE(b)
