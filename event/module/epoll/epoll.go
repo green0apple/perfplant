@@ -1,12 +1,10 @@
 package epoll
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"perfplant/event/module"
 	"syscall"
-	"unsafe"
 )
 
 var (
@@ -45,29 +43,19 @@ func (e *EPoll) Close() {
 	}
 }
 
-func (e *EPoll) Add(fd int, events uint32, data uintptr) error {
-	var (
-		ev  EpollEvent
-		ed  EpollData
-		ptr uintptr
-	)
-
-	ed.Fd = int32(fd)
-	ed.Ptr = data
-
-	ptr = uintptr(unsafe.Pointer(&ed))
-	binary.BigEndian.PutUint64(ev.Ptr[:], uint64(ptr))
-
+func (e *EPoll) Add(fd int, events uint32) error {
+	var ev syscall.EpollEvent
+	ev.Fd = int32(fd)
 	ev.Events = events
 	if e.edgeMode {
 		ev.Events |= EPOLLET
 	}
 
-	return EpollCtl(e.fd, syscall.EPOLL_CTL_ADD, fd, &ev)
+	return syscall.EpollCtl(e.fd, syscall.EPOLL_CTL_ADD, fd, &ev)
 }
 
-func (e *EPoll) WaitEvent(events []EpollEvent) (int, error) {
-	return EpollWait(e.fd, events, 0)
+func (e *EPoll) WaitEvent(events []syscall.EpollEvent) (int, error) {
+	return syscall.EpollWait(e.fd, events, 0)
 }
 
 func (e *EPoll) WaitProcessLoop() error {
@@ -80,9 +68,7 @@ func (e *EPoll) WaitProcessLoop() error {
 	}
 
 	var (
-		events       []EpollEvent = make([]EpollEvent, 64)
-		data         *EpollData
-		isNewConn    bool
+		events       []syscall.EpollEvent = make([]syscall.EpollEvent, 64)
 		i, count, fd int
 		err          error
 	)
@@ -94,38 +80,23 @@ func (e *EPoll) WaitProcessLoop() error {
 		}
 
 		for i = 0; i < count; i++ {
-			ptr := unsafe.Pointer(uintptr(binary.BigEndian.Uint64(events[i].Ptr[:])))
-			data = (*EpollData)(ptr)
-			fd = int(data.Fd)
-			if data.Ptr == 0 {
-				isNewConn = true
-			} else {
-				isNewConn = false
-			}
-
-			if isNewConn {
-				fmt.Printf("new connection!!\n")
-			}
+			fd = int(events[i].Fd)
 
 			if events[i].Events&syscall.EPOLLERR == 1 {
-				e.Callback.DoProcessErr(fd, data.Ptr)
+				e.Callback.DoProcessErr(fd)
 				continue // no need to process error connection
 			}
 
 			if events[i].Events&syscall.EPOLLIN == 1 {
-				if isNewConn {
-					e.Callback.DoAccept(fd, data.Ptr)
-				} else {
-					e.Callback.DoRead(fd, data.Ptr)
-				}
+				e.Callback.DoRead(fd)
 			}
 
 			if events[i].Events&syscall.EPOLLOUT == 1 {
-				e.Callback.DoWrite(fd, data.Ptr)
+				e.Callback.DoWrite(fd)
 			}
 
 			if events[i].Events&(syscall.EPOLLHUP|syscall.EPOLLRDHUP) == 1 {
-				e.Callback.DoClose(fd, data.Ptr)
+				e.Callback.DoClose(fd)
 			}
 		}
 	}

@@ -14,15 +14,6 @@ var (
 	ErrOnlySupportInet4 = errors.New("only supports ipv4")
 )
 
-func sockaddr4(sa syscall.Sockaddr) (*syscall.SockaddrInet4, error) {
-	switch saddr := sa.(type) {
-	case *syscall.SockaddrInet4:
-		return saddr, nil
-	default:
-		return nil, ErrOnlySupportInet4
-	}
-}
-
 func resolveUDP() (int, error) {
 	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_DGRAM, syscall.IPPROTO_UDP)
 	if err != nil {
@@ -57,16 +48,44 @@ func resolveUDP() (int, error) {
 	return fd, nil
 }
 
+func Sockaddr4(sa syscall.Sockaddr) (*syscall.SockaddrInet4, error) {
+	switch saddr := sa.(type) {
+	case *syscall.SockaddrInet4:
+		return saddr, nil
+	default:
+		return nil, ErrOnlySupportInet4
+	}
+}
+
 func Hash(saddr, daddr *syscall.SockaddrInet4) uint32 {
 	var b []byte
-	if saddr != nil {
-		b = append(b, saddr.Addr[:]...)
-		b = append(b, rbtree.PortLittleEndian(saddr.Port)...)
-	}
 
-	if daddr != nil {
-		b = append(b, daddr.Addr[:]...)
-		b = append(b, rbtree.PortLittleEndian(daddr.Port)...)
+	if saddr != nil && daddr != nil {
+		var addrs [2]*syscall.SockaddrInet4
+
+		if saddr.Port < daddr.Port {
+			addrs[0] = saddr
+			addrs[1] = daddr
+		} else {
+			addrs[0] = daddr
+			addrs[1] = saddr
+		}
+
+		for _, a := range addrs {
+			b = append(b, a.Addr[:]...)
+			b = append(b, rbtree.PortLittleEndian(a.Port)...)
+		}
+	} else {
+
+		if saddr != nil {
+			b = append(b, saddr.Addr[:]...)
+			b = append(b, rbtree.PortLittleEndian(saddr.Port)...)
+		}
+
+		if daddr != nil {
+			b = append(b, daddr.Addr[:]...)
+			b = append(b, rbtree.PortLittleEndian(daddr.Port)...)
+		}
 	}
 
 	return crc32.ChecksumIEEE(b)
@@ -122,13 +141,13 @@ func (uc *UDPConn) Dial(daddr *syscall.SockaddrInet4) error {
 		return err
 	}
 
-	sa, err := syscall.Getpeername(fd)
+	sa, err := syscall.Getsockname(fd)
 	if err != nil {
 		syscall.Close(fd)
 		return err
 	}
 
-	saddr, err := sockaddr4(sa)
+	saddr, err := Sockaddr4(sa)
 	if err != nil {
 		return err
 	}
@@ -152,7 +171,7 @@ func (uc *UDPConn) Recvmsg() (*syscall.SockaddrInet4, []byte, error) {
 		return nil, nil, err
 	}
 
-	saddr, err := sockaddr4(from)
+	saddr, err := Sockaddr4(from)
 	if err != nil {
 		return nil, nil, err
 	}
