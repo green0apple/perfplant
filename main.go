@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"perfplant/perfs/udp"
+	"perfplant/perf/udp"
 )
 
 func main() {

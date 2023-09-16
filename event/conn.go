@@ -2,6 +2,7 @@ package event
 
 import (
 	"errors"
+	"fmt"
 	"syscall"
 
 	"golang.org/x/sys/unix"
@@ -62,20 +63,33 @@ type conn struct {
 
 	saddr *syscall.SockaddrInet4
 	daddr *syscall.SockaddrInet4
+
+	saddrString string
+	daddrString string
 }
 
 func newConn() *conn {
 	return &conn{}
 }
 
-func (c *conn) SetFd(fd int32)                        { c.fd = fd }
-func (c *conn) Fd() int32                             { return c.fd }
-func (c *conn) IsValid() bool                         { return c.fd > 0 }
-func (c *conn) SetSAddr(saddr *syscall.SockaddrInet4) { c.saddr = saddr }
-func (c *conn) SetDAddr(daddr *syscall.SockaddrInet4) { c.daddr = daddr }
-func (c *conn) SAddr() *syscall.SockaddrInet4         { return c.saddr }
-func (c *conn) DAddr() *syscall.SockaddrInet4         { return c.daddr }
-func (c *conn) Hash() uint32                          { return HashAddr(c.saddr, c.daddr) }
+func (c *conn) SetFd(fd int32)                { c.fd = fd }
+func (c *conn) Fd() int32                     { return c.fd }
+func (c *conn) IsValid() bool                 { return c.fd > 0 }
+func (c *conn) Hash() uint32                  { return HashAddr(c.saddr, c.daddr) }
+func (c *conn) SAddr() *syscall.SockaddrInet4 { return c.saddr }
+func (c *conn) DAddr() *syscall.SockaddrInet4 { return c.daddr }
+func (c *conn) SAddrString() string           { return c.saddrString }
+func (c *conn) DAddrString() string           { return c.daddrString }
+
+func (c *conn) SetSAddr(saddr *syscall.SockaddrInet4) {
+	c.saddr = saddr
+	c.saddrString = fmt.Sprintf("%d.%d.%d.%d:%d", saddr.Addr[0], saddr.Addr[1], saddr.Addr[2], saddr.Addr[3], saddr.Port)
+}
+
+func (c *conn) SetDAddr(daddr *syscall.SockaddrInet4) {
+	c.daddr = daddr
+	c.daddrString = fmt.Sprintf("%d.%d.%d.%d:%d", daddr.Addr[0], daddr.Addr[1], daddr.Addr[2], daddr.Addr[3], daddr.Port)
+}
 
 func (c *conn) Close() {
 	if c.fd > 0 {
