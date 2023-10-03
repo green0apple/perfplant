@@ -1,21 +1,9 @@
-package perf
+package message
 
 const (
 	REQUEST_TARGET_ADDR_TYPE_SERIAL = iota + 1
 	REQUEST_TARGET_ADDR_TYPE_RANDOM
 )
-
-const (
-	REQUEST_MESSAGE_TYPE_FIXED = iota + 1
-	REQUEST_MESSAGE_TYPE_RANDOM
-)
-
-const (
-	RESPONSE_MESSAGE_TYPE_MATCHED = iota + 1
-	RESPONSE_MESSAGE_TYPE_INCLUDED
-)
-
-type BuildRequestMessage func() []byte
 
 type TargetTemplate struct {
 	IPRange     string `yaml:"ip_range"`

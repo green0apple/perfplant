@@ -5,6 +5,7 @@ import (
 	"perfplant/buffer/rbtree"
 	"perfplant/event"
 	"perfplant/event/module/epoll"
+	"perfplant/perf/message"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -40,10 +41,10 @@ func (t *clientConnectionsTree) LookupConn(fd int32) *event.UDPConn {
 }
 
 type Client struct {
-	RequestTemplatePath  string
-	ResponseTemplatePath string
-	tree                 clientConnectionsTree
-	epoll                epoll.EPoll
+	messageBuilder message.MessageBuilder
+
+	tree  clientConnectionsTree
+	epoll epoll.EPoll
 }
 
 func NewClient() *Client {
@@ -52,28 +53,20 @@ func NewClient() *Client {
 	}
 }
 
-func (c *Client) Run() error {
+func (c *Client) Run(builder message.MessageBuilder) error {
 	var err error
 	if err = c.epoll.Init(true); err != nil {
 		return err
 	}
+
 	c.epoll.Callback.DoRead = c.DoRead
 	c.epoll.Callback.DoWrite = c.DoWrite
 	c.epoll.Callback.DoClose = c.DoClose
 	c.epoll.Callback.DoProcessErr = c.DoProcessErr
 
-	if err = c.loadRequestTemplate(); err != nil {
-		return err
-	}
+	c.messageBuilder = builder
 
-	var request []byte
-	if c.BuildRequestMessage != nil {
-		request = c.BuildRequestMessage()
-	} else {
-		request = []byte(c.RequestMessage)
-	}
-
-	if err = c.request(request); err != nil {
+	if err = c.request(); err != nil {
 		return err
 	}
 
@@ -125,13 +118,11 @@ func (c *Client) CloseConn(conn *event.UDPConn) {
 	conn.Close()
 }
 
-func (c *Client) loadRequestTemplate() error {
-
-	return nil
-}
-
-func (c *Client) request(msg []byte) error {
-	var err error
+func (c *Client) request() error {
+	msg, err := c.messageBuilder()
+	if err != nil {
+		return err
+	}
 
 	conn := event.NewUDPConn()
 	if err = conn.Dial(&syscall.SockaddrInet4{Addr: [4]byte{127, 0, 0, 1}, Port: 4443}); err != nil {
@@ -145,7 +136,7 @@ func (c *Client) request(msg []byte) error {
 
 	c.tree.InsertConn(conn)
 
-	if err = conn.Sendto(conn.DAddr(), []byte("1234")); err != nil {
+	if err = conn.Sendto(conn.DAddr(), msg.Request); err != nil {
 		c.CloseConn(conn)
 		return err
 	}
