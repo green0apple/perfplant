@@ -1,11 +1,15 @@
 package main
 
 import (
-	"fmt"
-	"perfplant/perf/udp"
+	"perfplant/perf"
 )
 
 func main() {
-	c := udp.NewClient()
-	fmt.Printf("%s\n", c.Run())
+	p := perf.Plant{
+		ProtocolType: perf.PROTOCOL_TYPE_UDP,
+		RPS:          1,
+		MaxWorkers:   1,
+	}
+
+	p.Run()
 }

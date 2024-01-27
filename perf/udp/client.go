@@ -41,8 +41,6 @@ func (t *clientConnectionsTree) LookupConn(fd int32) *event.UDPConn {
 }
 
 type Client struct {
-	messageBuilder message.MessageBuilder
-
 	tree  clientConnectionsTree
 	epoll epoll.EPoll
 }
@@ -63,8 +61,6 @@ func (c *Client) Run(builder message.MessageBuilder) error {
 	c.epoll.Callback.DoWrite = c.DoWrite
 	c.epoll.Callback.DoClose = c.DoClose
 	c.epoll.Callback.DoProcessErr = c.DoProcessErr
-
-	c.messageBuilder = builder
 
 	if err = c.request(); err != nil {
 		return err
@@ -118,34 +114,21 @@ func (c *Client) CloseConn(conn *event.UDPConn) {
 	conn.Close()
 }
 
-func (c *Client) request() error {
-	msg, err := c.messageBuilder()
-	if err != nil {
-		return err
-	}
-
+func (c *Client) Dial(ip string, port int) (*event.UDPConn, error) {
 	conn := event.NewUDPConn()
+
+	var err error
+
 	if err = conn.Dial(&syscall.SockaddrInet4{Addr: [4]byte{127, 0, 0, 1}, Port: 4443}); err != nil {
-		return err
+		return nil, err
 	}
 
 	if err = c.epoll.Add(int(conn.Fd()), epoll.EPOLLIN); err != nil {
 		conn.Close()
-		return err
+		return nil, err
 	}
 
 	c.tree.InsertConn(conn)
 
-	if err = conn.Sendto(conn.DAddr(), msg.Request); err != nil {
-		c.CloseConn(conn)
-		return err
-	}
-
-	fmt.Printf("fd=%d\n", conn.Fd())
-
-	return nil
-}
-
-func (c *Client) response(conn *event.UDPConn, data []byte) {
-	fmt.Printf("%s->%s read %s\n", conn.DAddrString(), conn.SAddrString(), string(data))
+	return conn, nil
 }
